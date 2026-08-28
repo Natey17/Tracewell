@@ -88,6 +88,18 @@ their recommendations — the scanning and investigating happen on their own.
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    API["Third-party\nsourcing API"] --> DB[("Orders DB\n(Postgres)")]
+    DB --> Scanner{"Scanner\n(every 30s)"}
+    Scanner -- "anomaly found" --> Incident["Incident"]
+    Incident --> Agent["Claude agent\n(tool-use loop)"]
+    Agent -- "read-only queries" --> DB
+    Agent --> Report["Structured report\n(root cause, evidence,\nrecommended actions)"]
+    Incident --> Dashboard["React dashboard"]
+    Report --> Dashboard
+```
+
 ```
 apps/
   server/    Express + TypeScript API: anomaly scanner + Claude tool-use
@@ -196,6 +208,31 @@ a locally-installed Postgres — see `.env.example`.
 | GET | `/api/orders` | List orders (`?status=...&limit=...`) |
 | GET | `/api/orders/:id` | Order detail with full event history |
 
+## Design decisions & what's out of scope
+
+This was built to demonstrate the concept end-to-end — including a live,
+unscripted Claude investigation that correctly found a root cause it was
+never told — not to run against real production traffic. Deliberately left
+out, and what I'd tackle first if that changed:
+
+- **No auth.** The API and dashboard are wide open. Straightforward to add
+  (session/JWT middleware on the Express routes) but skipped since this
+  never leaves localhost.
+- **No automated tests.** Verified manually against live scans and live
+  agent runs instead of unit/integration tests. A production version would
+  need tests around the detectors' threshold logic (easy — pure functions
+  over Prisma queries) and the tool-use loop (harder — needs a fixture
+  transcript or a recorded-response mock for the Anthropic client).
+- **No CI/CD.** No GitHub Actions workflow gating merges.
+- **No cost or rate-limit guardrails** beyond a 12-tool-call cap per
+  investigation. Nothing stops repeated manual "Investigate" clicks from
+  making repeated paid API calls.
+- **No multi-instance coordination.** Two server replicas would each run
+  the scanner independently — a real deployment would need a lock (e.g. a
+  Postgres advisory lock) around the scan cycle.
+- **Polling, not push.** The dashboard polls every few seconds rather than
+  using WebSockets/SSE — fine at this scale, not at many concurrent viewers.
+
 ## Configuration
 
 See `.env.example` for all variables: connection string, Anthropic model,
@@ -207,3 +244,7 @@ each detector uses.
 ```bash
 npm run db:reset   # drops and re-migrates, then re-seeds
 ```
+
+## License
+
+[MIT](LICENSE)
