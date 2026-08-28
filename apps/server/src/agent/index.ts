@@ -12,6 +12,10 @@ const MAX_TOOL_ITERATIONS = 12;
 const SUBMIT_REPORT_TOOL: Anthropic.Tool = {
   name: "submit_incident_report",
   description: "Submit your final root-cause investigation report. Call this exactly once, after gathering evidence.",
+  // strict:true (with additionalProperties:false + required on every object
+  // level) makes the API validate tool_use.input against this schema before
+  // returning it, so a partial report can't reach the database.
+  strict: true,
   input_schema: {
     type: "object",
     properties: {
@@ -34,6 +38,7 @@ const SUBMIT_REPORT_TOOL: Anthropic.Tool = {
             finding: { type: "string", description: "One short sentence: what you checked and what you found." },
           },
           required: ["step", "finding"],
+          additionalProperties: false,
         },
         description: "A short chronological list of what you investigated and found, so a human can follow your reasoning.",
       },
@@ -44,6 +49,7 @@ const SUBMIT_REPORT_TOOL: Anthropic.Tool = {
       },
     },
     required: ["rootCause", "confidence", "affectedOrderIds", "evidenceTrail", "recommendedActions"],
+    additionalProperties: false,
   },
 };
 
@@ -123,7 +129,7 @@ async function investigate(incident: {
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const response = await anthropic.messages.create({
       model: config.anthropicModel,
-      max_tokens: 2048,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       tools,
       messages,

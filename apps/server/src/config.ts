@@ -16,6 +16,7 @@ export const config = {
   port: int("PORT", 4000),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
+  anthropicWorkspaceId: process.env.ANTHROPIC_WORKSPACE_ID ?? "",
   scannerIntervalSeconds: int("SCANNER_INTERVAL_SECONDS", 30),
   stuckOrderThresholdMinutes: int("STUCK_ORDER_THRESHOLD_MINUTES", 60),
   dataFlowGapThresholdMinutes: int("DATA_FLOW_GAP_THRESHOLD_MINUTES", 120),
