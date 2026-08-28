@@ -1,0 +1,33 @@
+{
+  "name": "tracewell",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-powered pipeline observability agent for order-sync pipelines",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/db && npm run build -w apps/server && npm run build -w apps/web",
+    "dev:server": "npm run dev -w apps/server",
+    "dev:web": "npm run dev -w apps/web",
+    "db:generate": "npm run generate -w packages/db",
+    "db:migrate": "npm run migrate -w packages/db",
+    "db:seed": "npm run seed -w packages/db",
+    "db:reset": "npm run reset -w packages/db"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "fsevents@2.3.3": true
+  }
+}

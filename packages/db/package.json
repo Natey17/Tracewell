@@ -1,0 +1,24 @@
+{
+  "name": "@tracewell/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "seed": "ts-node --transpile-only prisma/seed.ts",
+    "reset": "prisma migrate reset --force",
+    "build": "npm run generate && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^9.0.3",
+    "prisma": "^5.20.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}

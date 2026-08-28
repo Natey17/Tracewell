@@ -1,0 +1,154 @@
+// Tracewell data model.
+//
+// Order.sequenceNumber mirrors the strictly-increasing cursor the (mocked)
+// third-party sourcing API exposes orders in. The sync worker is modeled
+// after the real head-of-line-blocking bug this project exists to catch:
+// it advances PipelineCursor only after the order at the current position
+// reaches a terminal state, so one order stuck in AWAITING_SETTLEMENT holds
+// back every order behind it even though they've already been discovered.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  DISCOVERED          // seen from the third-party API, not yet processed
+  SYNCING              // sync worker actively processing
+  AWAITING_SETTLEMENT  // synced but waiting on financial settlement confirmation
+  SETTLED              // settlement confirmed
+  SYNCED               // fully synced into Tracewell's local system (terminal success)
+  FAILED               // sync worker gave up (terminal failure)
+  CANCELLED            // order cancelled upstream (terminal)
+}
+
+enum SyncEventType {
+  DISCOVERED
+  SYNC_ATTEMPT
+  SYNC_SUCCESS
+  SYNC_FAILURE
+  SETTLEMENT_CHECK
+  SETTLEMENT_CONFIRMED
+  RETRY_SCHEDULED
+  BLOCKED_WAITING
+}
+
+enum IncidentType {
+  STUCK_ORDER
+  BLOCKED_BACKLOG
+  SYNC_FAILURE_SPIKE
+  DATA_FLOW_GAP
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  IGNORED
+}
+
+enum ReportStatus {
+  SUCCESS
+  FAILED
+}
+
+model Order {
+  id               Int       @id @default(autoincrement())
+  externalId       String    @unique
+  sequenceNumber   Int       @unique
+  status           OrderStatus @default(DISCOVERED)
+
+  customerEmail    String
+  amountCents      Int
+  currency         String    @default("USD")
+
+  placedAt         DateTime
+  discoveredAt     DateTime  @default(now())
+  syncedAt         DateTime?
+  settledAt        DateTime?
+
+  lastAttemptAt    DateTime?
+  attemptCount     Int       @default(0)
+  lastError        String?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  events           SyncEvent[]
+
+  @@index([status])
+  @@index([placedAt])
+}
+
+model SyncEvent {
+  id         Int           @id @default(autoincrement())
+  orderId    Int
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       SyncEventType
+  message    String
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+/// Singleton-per-name watermark the sync worker advances through.
+model PipelineCursor {
+  id                        Int      @id @default(autoincrement())
+  name                      String   @unique
+  lastProcessedSequenceNumber Int    @default(0)
+  updatedAt                 DateTime @updatedAt
+}
+
+model Incident {
+  id              Int            @id @default(autoincrement())
+  type            IncidentType
+  severity        Severity
+  status          IncidentStatus @default(OPEN)
+  title           String
+  summary         String
+  relatedOrderIds Int[]
+
+  detectedAt      DateTime       @default(now())
+  resolvedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  reports         IncidentReport[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model IncidentReport {
+  id                Int          @id @default(autoincrement())
+  incidentId        Int
+  incident          Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  status            ReportStatus @default(SUCCESS)
+  model             String
+  rootCause         String
+  confidence        String
+  affectedOrderIds  Int[]
+  evidenceTrail     Json
+  recommendedActions Json
+  rawModelOutput    Json?
+  errorMessage      String?
+
+  generatedAt       DateTime     @default(now())
+
+  @@index([incidentId])
+}
