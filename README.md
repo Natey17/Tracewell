@@ -195,6 +195,41 @@ agent-generated report following shortly after.
 Postgres is exposed on host port **5433**, not 5432, to avoid colliding with
 a locally-installed Postgres — see `.env.example`.
 
+## Testing
+
+```bash
+npm test              # both workspaces
+npm run test:coverage # both workspaces, with coverage reports
+```
+
+**Backend** (`apps/server`, Vitest + Supertest): 79 tests across detectors,
+services, routes, and the agent — run as integration tests against a real,
+disposable `tracewell_test` Postgres database (auto-created and migrated by
+a Vitest global setup script), not mocked Prisma calls. The one thing that
+*is* mocked is the Anthropic client itself — the tool-use loop is tested
+against a scripted fake model response, so it's deterministic, free, and
+covers cases a live call can't reliably reproduce on demand (a malformed
+report, a max-iterations timeout, an API error). One of those tests is a
+direct regression test for a bug this project actually hit: a live Claude
+response once omitted a required field and crashed the Prisma write before
+`submit_incident_report` was hardened with a strict schema.
+
+Current coverage: **94.5% statements / 97.7% lines / 77.4% branches** (v8
+coverage, `npm run test:coverage -w apps/server`).
+
+**Frontend** (`apps/web`, Vitest + React Testing Library): 27 tests
+covering the presentational components, the `usePolling` hook, and the API
+client's request/error handling. The four page components (`Overview`,
+`Incidents`, `Orders`, `IncidentDetail`) are thin composition of those
+already-tested pieces plus polling and aren't separately covered — current
+statement coverage is **42.5%**, concentrated in the tested layers rather
+than spread thin across untested pages.
+
+CI (`.github/workflows/ci.yml`) runs `npm run build` and `npm test` on every
+push and PR, against a Postgres service container. Backend tests default to
+`postgresql://tracewell:tracewell@localhost:5433/tracewell_test` (the local
+docker-compose Postgres); set `TEST_DATABASE_URL` to point them elsewhere.
+
 ## API reference
 
 | Method | Path | Does |
@@ -218,12 +253,9 @@ out, and what I'd tackle first if that changed:
 - **No auth.** The API and dashboard are wide open. Straightforward to add
   (session/JWT middleware on the Express routes) but skipped since this
   never leaves localhost.
-- **No automated tests.** Verified manually against live scans and live
-  agent runs instead of unit/integration tests. A production version would
-  need tests around the detectors' threshold logic (easy — pure functions
-  over Prisma queries) and the tool-use loop (harder — needs a fixture
-  transcript or a recorded-response mock for the Anthropic client).
-- **No CI/CD.** No GitHub Actions workflow gating merges.
+- **Frontend page-level coverage is thin.** Components, hooks, and the API
+  client are tested; the pages that compose them into a screen aren't — see
+  [Testing](#testing).
 - **No cost or rate-limit guardrails** beyond a 12-tool-call cap per
   investigation. Nothing stops repeated manual "Investigate" clicks from
   making repeated paid API calls.

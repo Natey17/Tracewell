@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import { getPrismaClient, IncidentStatus, ReportStatus } from "@tracewell/db";
 import { config } from "../config";
 import { getAnthropicClient } from "./client";
@@ -53,13 +54,20 @@ const SUBMIT_REPORT_TOOL: Anthropic.Tool = {
   },
 };
 
-interface SubmittedReport {
-  rootCause: string;
-  confidence: string;
-  affectedOrderIds: number[];
-  evidenceTrail: { step: number; finding: string }[];
-  recommendedActions: string[];
-}
+// Mirrors SUBMIT_REPORT_TOOL's input_schema. strict:true makes the API
+// guarantee tool_use.input matches that schema — this is the second,
+// independent line of defense: if the SDK version, model, or schema ever
+// drifts out of sync, a malformed report fails loudly here with a clear
+// message instead of crashing on the Prisma write.
+const submittedReportSchema = z.object({
+  rootCause: z.string(),
+  confidence: z.enum(["low", "medium", "high"]),
+  affectedOrderIds: z.array(z.number().int()),
+  evidenceTrail: z.array(z.object({ step: z.number().int(), finding: z.string() })),
+  recommendedActions: z.array(z.string()),
+});
+
+type SubmittedReport = z.infer<typeof submittedReportSchema>;
 
 export async function runInvestigation(incidentId: number): Promise<void> {
   const incident = await prisma.incident.findUnique({ where: { id: incidentId } });
@@ -143,7 +151,11 @@ async function investigate(incident: {
 
     const submitBlock = toolUseBlocks.find((b) => b.name === "submit_incident_report");
     if (submitBlock) {
-      return submitBlock.input as SubmittedReport;
+      const parsed = submittedReportSchema.safeParse(submitBlock.input);
+      if (!parsed.success) {
+        throw new Error(`submit_incident_report returned a malformed report: ${parsed.error.message}`);
+      }
+      return parsed.data;
     }
 
     if (toolUseBlocks.length === 0) {

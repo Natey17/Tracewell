@@ -14,7 +14,9 @@
     "db:generate": "npm run generate -w packages/db",
     "db:migrate": "npm run migrate -w packages/db",
     "db:seed": "npm run seed -w packages/db",
-    "db:reset": "npm run reset -w packages/db"
+    "db:reset": "npm run reset -w packages/db",
+    "test": "npm test -w apps/server && npm test -w apps/web",
+    "test:coverage": "npm run test:coverage -w apps/server && npm run test:coverage -w apps/web"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
